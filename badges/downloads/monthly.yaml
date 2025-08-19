@@ -1,0 +1,11 @@
+data_source: pepy.tech_v2
+last_updated: '2025-08-19T19:32:03.547324+00:00'
+monthly_downloads: 16126513
+most_recent_daily_downloads: 624919
+most_recent_data_date: '2025-08-18'
+package: holidays
+reporting_period:
+  end_date: '2025-07-31'
+  month: 2025-07
+  start_date: '2025-07-01'
+total_downloads_all_time: 363959256

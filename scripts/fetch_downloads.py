@@ -114,6 +114,38 @@ def extract_monthly_downloads(data: Dict[str, Any]) -> Optional[int]:
         return None
 
 
+def humanize_number(value: int) -> str:
+    """Convert a number to human-readable format with K/M/B suffixes, rounded to full units."""
+    if value < 1000:
+        return str(value)
+
+    # Round to nearest thousand, million, billion, etc.
+    if value < 1000000:
+        # Round to nearest thousand
+        rounded = round(value / 1000)
+        if rounded == 0:
+            return "1K"
+        # If rounding to 1000K, convert to 1M
+        if rounded >= 1000:
+            return "1M"
+        return f"{rounded}K"
+    elif value < 1000000000:
+        # Round to nearest million
+        rounded = round(value / 1000000)
+        if rounded == 0:
+            return "1M"
+        # If rounding to 1000M, convert to 1B
+        if rounded >= 1000:
+            return "1B"
+        return f"{rounded}M"
+    else:
+        # Round to nearest billion
+        rounded = round(value / 1000000000)
+        if rounded == 0:
+            return "1B"
+        return f"{rounded}B"
+
+
 def create_output_data(
     monthly_downloads: int, api_data: Dict[str, Any]
 ) -> Dict[str, Any]:
@@ -121,19 +153,24 @@ def create_output_data(
     first_previous_month, last_previous_month = get_previous_month_dates()
 
     output_data = {
-        "last_updated": datetime.now(timezone.utc).isoformat(),
-        "monthly_downloads": monthly_downloads,
         "data_source": "pepy.tech_v2",
+        "last_updated": datetime.now(timezone.utc).isoformat(),
         "package": PACKAGE_NAME,
         "reporting_period": {
-            "month": first_previous_month.strftime("%Y-%m"),
             "start_date": first_previous_month.strftime("%Y-%m-%d"),
             "end_date": last_previous_month.strftime("%Y-%m-%d"),
         },
     }
 
+    # Group monthly downloads values together
+    output_data["monthly_downloads"] = monthly_downloads
+    output_data["human_monthly_downloads"] = humanize_number(monthly_downloads)
+
+    # Group total downloads values together
     if "total_downloads" in api_data:
-        output_data["total_downloads_all_time"] = api_data["total_downloads"]
+        total_downloads = api_data["total_downloads"]
+        output_data["total_downloads_all_time"] = total_downloads
+        output_data["human_total_downloads_all_time"] = humanize_number(total_downloads)
 
     if "downloads" in api_data:
         dates = list(api_data["downloads"].keys())
@@ -149,7 +186,11 @@ def create_output_data(
                     for value in recent_data.values()
                     if isinstance(value, (int, float))
                 )
+                # Group most recent daily downloads values together
                 output_data["most_recent_daily_downloads"] = recent_total
+                output_data["human_most_recent_daily_downloads"] = humanize_number(
+                    recent_total
+                )
 
     return output_data
 

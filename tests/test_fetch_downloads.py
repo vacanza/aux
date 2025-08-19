@@ -12,9 +12,37 @@ from scripts.fetch_downloads import (
     extract_monthly_downloads,
     fetch_download_data,
     get_previous_month_dates,
+    humanize_number,
     main,
     save_yaml_data,
 )
+
+
+class TestHumanizeNumber:
+    """Test the humanize_number function."""
+
+    def test_humanize_number_small(self):
+        """Test humanization of small numbers."""
+        assert humanize_number(500) == "500"
+        assert humanize_number(999) == "999"
+
+    def test_humanize_number_thousands(self):
+        """Test humanization of thousands."""
+        assert humanize_number(1000) == "1K"
+        assert humanize_number(1500) == "2K"
+        assert humanize_number(999999) == "1M"
+
+    def test_humanize_number_millions(self):
+        """Test humanization of millions."""
+        assert humanize_number(1000000) == "1M"
+        assert humanize_number(1500000) == "2M"
+        assert humanize_number(999999999) == "1B"
+
+    def test_humanize_number_billions(self):
+        """Test humanization of billions."""
+        assert humanize_number(1000000000) == "1B"
+        assert humanize_number(1500000000) == "2B"
+        assert humanize_number(2500000000) == "2B"
 
 
 class TestGetPreviousMonthDates:
@@ -182,10 +210,13 @@ class TestCreateOutputData:
             result = create_output_data(500, api_data)
 
             assert result["monthly_downloads"] == 500
+            assert result["human_monthly_downloads"] == "500"
             assert result["data_source"] == "pepy.tech_v2"
             assert result["package"] == "holidays"
-            assert result["reporting_period"]["month"] == "2024-01"
+            assert result["reporting_period"]["start_date"] == "2024-01-01"
+            assert result["reporting_period"]["end_date"] == "2024-01-31"
             assert result["total_downloads_all_time"] == 1000
+            assert result["human_total_downloads_all_time"] == "1K"
 
     def test_create_output_data_with_downloads(self):
         """Test output data creation with downloads data."""
@@ -206,6 +237,7 @@ class TestCreateOutputData:
 
             assert result["most_recent_data_date"] == "2024-01-16"
             assert result["most_recent_daily_downloads"] == 200
+            assert result["human_most_recent_daily_downloads"] == "200"
 
 
 class TestSaveYamlData:

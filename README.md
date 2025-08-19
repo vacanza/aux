@@ -13,7 +13,7 @@ The system consists of:
 
 - `scripts/fetch_downloads.py` - Main script to fetch and process download data from pepy.tech API
 - `.github/workflows/fetch-downloads.yml` - GitHub Actions workflow for daily data fetching
-- `.github/workflows/ci.yml` - CI/CD workflow for testing and quality checks (Python 3.12)
+- `.github/workflows/ci.yml` - CI/CD workflow for testing and quality checks (Python 3.13)
 - `tests/test_fetch_downloads.py` - Comprehensive test suite with 97% coverage
 - `Makefile` - Development commands and automation
 - `requirements.txt` - Python dependencies and development tools
@@ -113,11 +113,12 @@ The test suite covers:
 - **Date calculations** - Previous month date range logic
 - **API interactions** - Request handling, authentication, error cases
 - **Data processing** - Monthly download extraction and validation
-- **Output generation** - YAML file creation and metadata
+- **Output generation** - YAML file creation and metadata with humanized values
+- **Number humanization** - Converting large numbers to readable formats (K, M, B) using the `humanize` package
 - **Error handling** - Network failures, invalid data, file operations
 - **Integration** - Complete workflow from API to output
 
-Current test coverage: **97%**
+Current test coverage: **96%**
 
 ## Manual Execution
 
@@ -152,17 +153,26 @@ The workflow is configured to:
 The YAML file contains:
 ```yaml
 data_source: "pepy.tech_v2"
+human_monthly_downloads: "12K"
+human_most_recent_daily_downloads: "1M"
+human_total_downloads_all_time: "1B"
 last_updated: "2024-01-15T10:30:00Z"
 monthly_downloads: 12345
 most_recent_data_date: "2023-08-29"
 most_recent_daily_downloads: 1143552
 package: "holidays"
 reporting_period:
-  end_date: "2024-01-31"
-  month: "2024-01"
   start_date: "2024-01-01"
+  end_date: "2024-01-31"
 total_downloads_all_time: 1395207458
 ```
+
+**Humanized Values:**
+- `human_monthly_downloads`: Human-readable monthly downloads (e.g., "12K", "1M", "2M")
+- `human_most_recent_daily_downloads`: Human-readable daily downloads (e.g., "1M", "500K", "2M")
+- `human_total_downloads_all_time`: Human-readable total downloads (e.g., "1B", "2B", "3B")
+
+**Note:** Numbers are rounded to the nearest full unit (K, M, B) without fractional parts.
 
 ## API Endpoint
 

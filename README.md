@@ -19,7 +19,7 @@ The system consists of:
 - `requirements.txt` - Python dependencies and development tools
 - `pyproject.toml` - Ruff configuration for linting and formatting
 - `.pre-commit-config.yaml` - Pre-commit hooks configuration
-- `badges/downloads/monthly.yaml` - Output file (created by the workflow)
+- `badges/downloads/pepy.tech.yaml` - Output file (created by the workflow)
 
 ## Setup
 
@@ -153,13 +153,13 @@ The workflow is configured to:
 The YAML file contains:
 ```yaml
 data_source: "pepy.tech_v2"
-human_monthly_downloads: "12K"
-human_most_recent_daily_downloads: "1M"
-human_total_downloads_all_time: "1B"
+monthly_downloads_human: "12K"
+daily_downloads_human: "1M"
+total_downloads_all_time_human: "1B"
 last_updated: "2024-01-15T10:30:00Z"
 monthly_downloads: 12345
 most_recent_data_date: "2023-08-29"
-most_recent_daily_downloads: 1143552
+daily_downloads: 1143552
 package: "holidays"
 reporting_period:
   start_date: "2024-01-01"
@@ -168,9 +168,9 @@ total_downloads_all_time: 1395207458
 ```
 
 **Humanized Values:**
-- `human_monthly_downloads`: Human-readable monthly downloads (e.g., "12K", "1M", "2M")
-- `human_most_recent_daily_downloads`: Human-readable daily downloads (e.g., "1M", "500K", "2M")
-- `human_total_downloads_all_time`: Human-readable total downloads (e.g., "1B", "2B", "3B")
+- `monthly_downloads_human`: Human-readable monthly downloads (e.g., "12K", "1M", "2M")
+- `daily_downloads_human`: Human-readable daily downloads (e.g., "1M", "500K", "2M")
+- `total_downloads_all_time_human`: Human-readable total downloads (e.g., "1B", "2B", "3B")
 
 **Note:** Numbers are rounded to the nearest full unit (K, M, B) without fractional parts.
 

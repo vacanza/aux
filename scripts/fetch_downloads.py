@@ -19,7 +19,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-OUTPUT_FILE = Path("badges/downloads/monthly.yaml")
+OUTPUT_FILE = Path("badges/downloads/pepy.tech.yaml")
 PACKAGE_NAME = "holidays"
 API_URL = "https://api.pepy.tech/api/v2/projects/holidays"
 
@@ -155,23 +155,9 @@ def create_output_data(
     output_data = {
         "data_source": "pepy.tech_v2",
         "last_updated": datetime.now(timezone.utc).isoformat(),
-        "package": PACKAGE_NAME,
-        "reporting_period": {
-            "start_date": first_previous_month.strftime("%Y-%m-%d"),
-            "end_date": last_previous_month.strftime("%Y-%m-%d"),
-        },
     }
 
-    # Group monthly downloads values together
-    output_data["monthly_downloads"] = monthly_downloads
-    output_data["human_monthly_downloads"] = humanize_number(monthly_downloads)
-
-    # Group total downloads values together
-    if "total_downloads" in api_data:
-        total_downloads = api_data["total_downloads"]
-        output_data["total_downloads_all_time"] = total_downloads
-        output_data["human_total_downloads_all_time"] = humanize_number(total_downloads)
-
+    # Add most recent data date after last_updated
     if "downloads" in api_data:
         dates = list(api_data["downloads"].keys())
         if dates:
@@ -179,6 +165,19 @@ def create_output_data(
             most_recent_date = dates[0]
             output_data["most_recent_data_date"] = most_recent_date
 
+    # Add package and reporting period
+    output_data["package"] = PACKAGE_NAME
+    output_data["reporting_period"] = {
+        "start_date": first_previous_month.strftime("%Y-%m-%d"),
+        "end_date": last_previous_month.strftime("%Y-%m-%d"),
+    }
+
+    # Group daily downloads values together (raw + human)
+    if "downloads" in api_data:
+        dates = list(api_data["downloads"].keys())
+        if dates:
+            dates.sort(reverse=True)
+            most_recent_date = dates[0]
             recent_data = api_data["downloads"][most_recent_date]
             if isinstance(recent_data, dict):
                 recent_total = sum(
@@ -186,11 +185,19 @@ def create_output_data(
                     for value in recent_data.values()
                     if isinstance(value, (int, float))
                 )
-                # Group most recent daily downloads values together
-                output_data["most_recent_daily_downloads"] = recent_total
-                output_data["human_most_recent_daily_downloads"] = humanize_number(
-                    recent_total
-                )
+                # Group daily downloads values together
+                output_data["daily_downloads"] = recent_total
+                output_data["daily_downloads_human"] = humanize_number(recent_total)
+
+    # Group all download values together in one section
+    output_data["monthly_downloads"] = monthly_downloads
+    output_data["monthly_downloads_human"] = humanize_number(monthly_downloads)
+
+    # Group total downloads values together (raw + human)
+    if "total_downloads" in api_data:
+        total_downloads = api_data["total_downloads"]
+        output_data["total_downloads_all_time"] = total_downloads
+        output_data["total_downloads_all_time_human"] = humanize_number(total_downloads)
 
     return output_data
 
@@ -200,7 +207,7 @@ def save_yaml_data(data: Dict[str, Any]) -> bool:
     try:
         OUTPUT_FILE.parent.mkdir(parents=True, exist_ok=True)
         with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
-            yaml.dump(data, f, default_flow_style=False, sort_keys=True)
+            yaml.dump(data, f, default_flow_style=False, sort_keys=False)
         logger.info(f"Successfully saved data to {OUTPUT_FILE}")
         return True
     except Exception as e:

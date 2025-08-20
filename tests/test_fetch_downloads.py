@@ -9,8 +9,10 @@ from unittest.mock import Mock, patch
 # Import the functions to test
 from scripts.fetch_downloads import (
     create_output_data,
+    extract_latest_30_days_downloads,
     extract_monthly_downloads,
     fetch_download_data,
+    get_latest_30_days_dates,
     get_previous_month_dates,
     humanize_number,
     main,
@@ -73,6 +75,23 @@ class TestGetPreviousMonthDates:
             # Should return December 2023
             assert first == datetime(2023, 12, 1, 0, 0, 0, tzinfo=timezone.utc)
             assert last == datetime(2023, 12, 31, 0, 0, 0, tzinfo=timezone.utc)
+
+
+class TestGetLatest30DaysDates:
+    """Test the get_latest_30_days_dates function."""
+
+    def test_get_latest_30_days_dates(self):
+        """Test that latest 30 days dates are calculated correctly."""
+        with patch("scripts.fetch_downloads.datetime") as mock_datetime:
+            # Mock current date to be 2024-02-15
+            mock_now = datetime(2024, 2, 15, 12, 0, 0, tzinfo=timezone.utc)
+            mock_datetime.now.return_value = mock_now
+
+            start, end = get_latest_30_days_dates()
+
+            # Should return 30 days before 2024-02-15
+            assert start == datetime(2024, 1, 16, 0, 0, 0, tzinfo=timezone.utc)
+            assert end == datetime(2024, 2, 15, 0, 0, 0, tzinfo=timezone.utc)
 
 
 class TestFetchDownloadData:
@@ -195,6 +214,76 @@ class TestExtractMonthlyDownloads:
             assert result == 200  # Only valid date should be processed
 
 
+class TestExtractLatest30DaysDownloads:
+    """Test the extract_latest_30_days_downloads function."""
+
+    def test_extract_latest_30_days_downloads_success(self):
+        """Test successful latest 30 days downloads extraction."""
+        with patch("scripts.fetch_downloads.get_latest_30_days_dates") as mock_dates:
+            mock_dates.return_value = (
+                datetime(2024, 1, 1, tzinfo=timezone.utc),
+                datetime(2024, 1, 31, tzinfo=timezone.utc),
+            )
+
+            api_data = {
+                "downloads": {
+                    "2024-01-15": {"1.0": 100},
+                    "2024-01-16": {"1.0": 200},
+                    "2024-02-01": {"1.0": 300},  # Outside range
+                }
+            }
+
+            result = extract_latest_30_days_downloads(api_data)
+            assert result == 300  # 100 + 200
+
+    def test_extract_latest_30_days_downloads_no_downloads_key(self):
+        """Test extraction when downloads key is missing."""
+        api_data = {"other_key": "value"}
+        result = extract_latest_30_days_downloads(api_data)
+        assert result is None
+
+    def test_extract_latest_30_days_downloads_invalid_downloads_type(self):
+        """Test extraction when downloads is not a dictionary."""
+        api_data = {"downloads": "not_a_dict"}
+        result = extract_latest_30_days_downloads(api_data)
+        assert result is None
+
+    def test_extract_latest_30_days_downloads_no_data_for_period(self):
+        """Test extraction when no data exists for the period."""
+        with patch("scripts.fetch_downloads.get_latest_30_days_dates") as mock_dates:
+            mock_dates.return_value = (
+                datetime(2024, 1, 1, tzinfo=timezone.utc),
+                datetime(2024, 1, 31, tzinfo=timezone.utc),
+            )
+
+            api_data = {
+                "downloads": {
+                    "2024-02-01": {"1.0": 100},  # Outside range
+                }
+            }
+
+            result = extract_latest_30_days_downloads(api_data)
+            assert result is None
+
+    def test_extract_latest_30_days_downloads_invalid_date_format(self):
+        """Test extraction with invalid date format."""
+        with patch("scripts.fetch_downloads.get_latest_30_days_dates") as mock_dates:
+            mock_dates.return_value = (
+                datetime(2024, 1, 1, tzinfo=timezone.utc),
+                datetime(2024, 1, 31, tzinfo=timezone.utc),
+            )
+
+            api_data = {
+                "downloads": {
+                    "invalid-date": {"1.0": 100},
+                    "2024-01-15": {"1.0": 200},
+                }
+            }
+
+            result = extract_latest_30_days_downloads(api_data)
+            assert result == 200  # Only valid date should be processed
+
+
 class TestCreateOutputData:
     """Test the create_output_data function."""
 
@@ -207,14 +296,16 @@ class TestCreateOutputData:
             )
 
             api_data = {"total_downloads": 1000}
-            result = create_output_data(500, api_data)
+            result = create_output_data(500, 1200, api_data)
 
             assert result["monthly_downloads"] == 500
             assert result["monthly_downloads_human"] == "500"
-            assert result["data_source"] == "pepy.tech_v2"
+            assert result["last_30d_downloads"] == 1200
+            assert result["last_30d_downloads_human"] == "1K"
+            assert result["source"] == "https://pepy.tech/pepy-api"
             assert result["package"] == "holidays"
-            assert result["reporting_period"]["start_date"] == "2024-01-01"
-            assert result["reporting_period"]["end_date"] == "2024-01-31"
+            assert result["monthly_reporting_period"]["start_date"] == "2024-01-01"
+            assert result["monthly_reporting_period"]["end_date"] == "2024-01-31"
             assert result["total_downloads_all_time"] == 1000
             assert result["total_downloads_all_time_human"] == "1K"
 
@@ -233,11 +324,13 @@ class TestCreateOutputData:
                 }
             }
 
-            result = create_output_data(300, api_data)
+            result = create_output_data(300, 800, api_data)
 
             assert result["most_recent_data_date"] == "2024-01-16"
             assert result["daily_downloads"] == 200
             assert result["daily_downloads_human"] == "200"
+            assert result["last_30d_downloads"] == 800
+            assert result["last_30d_downloads_human"] == "800"
 
 
 class TestSaveYamlData:
@@ -277,12 +370,16 @@ class TestMain:
 
     @patch("scripts.fetch_downloads.fetch_download_data")
     @patch("scripts.fetch_downloads.extract_monthly_downloads")
+    @patch("scripts.fetch_downloads.extract_latest_30_days_downloads")
     @patch("scripts.fetch_downloads.create_output_data")
     @patch("scripts.fetch_downloads.save_yaml_data")
-    def test_main_success(self, mock_save, mock_create, mock_extract, mock_fetch):
+    def test_main_success(
+        self, mock_save, mock_create, mock_extract_30d, mock_extract, mock_fetch
+    ):
         """Test successful main function execution."""
         mock_fetch.return_value = {"downloads": {"2024-01-01": {"1.0": 100}}}
         mock_extract.return_value = 100
+        mock_extract_30d.return_value = 150
         mock_create.return_value = {"monthly_downloads": 100}
         mock_save.return_value = True
 
@@ -300,7 +397,7 @@ class TestMain:
     @patch("scripts.fetch_downloads.fetch_download_data")
     @patch("scripts.fetch_downloads.extract_monthly_downloads")
     def test_main_extract_failure(self, mock_extract, mock_fetch):
-        """Test main function with extraction failure."""
+        """Test main function with monthly extraction failure."""
         mock_fetch.return_value = {"downloads": {}}
         mock_extract.return_value = None
 
@@ -309,12 +406,28 @@ class TestMain:
 
     @patch("scripts.fetch_downloads.fetch_download_data")
     @patch("scripts.fetch_downloads.extract_monthly_downloads")
+    @patch("scripts.fetch_downloads.extract_latest_30_days_downloads")
+    def test_main_extract_30d_failure(self, mock_extract_30d, mock_extract, mock_fetch):
+        """Test main function with 30-day extraction failure."""
+        mock_fetch.return_value = {"downloads": {}}
+        mock_extract.return_value = 100
+        mock_extract_30d.return_value = None
+
+        result = main()
+        assert result == 1
+
+    @patch("scripts.fetch_downloads.fetch_download_data")
+    @patch("scripts.fetch_downloads.extract_monthly_downloads")
+    @patch("scripts.fetch_downloads.extract_latest_30_days_downloads")
     @patch("scripts.fetch_downloads.create_output_data")
     @patch("scripts.fetch_downloads.save_yaml_data")
-    def test_main_save_failure(self, mock_save, mock_create, mock_extract, mock_fetch):
+    def test_main_save_failure(
+        self, mock_save, mock_create, mock_extract_30d, mock_extract, mock_fetch
+    ):
         """Test main function with save failure."""
         mock_fetch.return_value = {"downloads": {"2024-01-01": {"1.0": 100}}}
         mock_extract.return_value = 100
+        mock_extract_30d.return_value = 150
         mock_create.return_value = {"monthly_downloads": 100}
         mock_save.return_value = False
 
@@ -350,10 +463,19 @@ class TestIntegration:
                 )
 
                 with patch(
-                    "scripts.fetch_downloads.OUTPUT_FILE", Path("/tmp/test_output.yaml")
-                ):
-                    result = main()
+                    "scripts.fetch_downloads.get_latest_30_days_dates"
+                ) as mock_30d_dates:
+                    mock_30d_dates.return_value = (
+                        datetime(2024, 1, 1, tzinfo=timezone.utc),
+                        datetime(2024, 1, 31, tzinfo=timezone.utc),
+                    )
 
-                    assert result == 0
-                    # Verify the workflow executed all steps
-                    mock_get.assert_called_once()
+                    with patch(
+                        "scripts.fetch_downloads.OUTPUT_FILE",
+                        Path("/tmp/test_output.yaml"),
+                    ):
+                        result = main()
+
+                        assert result == 0
+                        # Verify the workflow executed all steps
+                        mock_get.assert_called_once()

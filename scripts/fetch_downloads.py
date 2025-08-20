@@ -60,6 +60,14 @@ def get_previous_month_dates():
     return first_previous_month, last_previous_month
 
 
+def get_latest_30_days_dates():
+    """Get the start and end dates for the latest 30 days."""
+    now = datetime.now(timezone.utc)
+    end_date = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    start_date = end_date - timedelta(days=30)
+    return start_date, end_date
+
+
 def extract_monthly_downloads(data: Dict[str, Any]) -> Optional[int]:
     """Extract download count for the previous complete month only."""
     try:
@@ -114,6 +122,62 @@ def extract_monthly_downloads(data: Dict[str, Any]) -> Optional[int]:
         return None
 
 
+def extract_latest_30_days_downloads(data: Dict[str, Any]) -> Optional[int]:
+    """Extract download count for the latest 30 days."""
+    try:
+        logger.info(
+            f"Processing API response for latest 30 days with keys: {list(data.keys())}"
+        )
+
+        if "downloads" not in data:
+            logger.error("No 'downloads' key found in API response")
+            return None
+
+        downloads = data["downloads"]
+        if not isinstance(downloads, dict):
+            logger.error("'downloads' is not a dictionary")
+            return None
+
+        start_date, end_date = get_latest_30_days_dates()
+        logger.info(
+            f"Calculating downloads for latest 30 days: {start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}"
+        )
+
+        latest_30_days_downloads = 0
+        processed_dates = []
+
+        for date_str, version_data in downloads.items():
+            try:
+                date_obj = datetime.strptime(date_str, "%Y-%m-%d").replace(
+                    tzinfo=timezone.utc
+                )
+                if start_date <= date_obj <= end_date:
+                    if isinstance(version_data, dict):
+                        daily_total = sum(
+                            int(value)
+                            for value in version_data.values()
+                            if isinstance(value, (int, float))
+                        )
+                        latest_30_days_downloads += daily_total
+                        processed_dates.append(date_str)
+            except ValueError as e:
+                logger.warning(f"Could not parse date '{date_str}': {e}")
+                continue
+
+        logger.info(f"Processed {len(processed_dates)} days from latest 30 days")
+        logger.info(f"Latest 30 days total downloads: {latest_30_days_downloads}")
+
+        if len(processed_dates) == 0:
+            logger.warning("No data found for the latest 30 days")
+            return None
+
+        return latest_30_days_downloads
+
+    except Exception as e:
+        logger.error(f"Error extracting latest 30 days downloads: {e}")
+        return None
+
+
 def humanize_number(value: int) -> str:
     """Convert a number to human-readable format with K/M/B suffixes, rounded to full units."""
     if value < 1000:
@@ -147,13 +211,15 @@ def humanize_number(value: int) -> str:
 
 
 def create_output_data(
-    monthly_downloads: int, api_data: Dict[str, Any]
+    monthly_downloads: int, latest_30_days_downloads: int, api_data: Dict[str, Any]
 ) -> Dict[str, Any]:
     """Create the output data structure with enhanced information from API v2."""
     first_previous_month, last_previous_month = get_previous_month_dates()
+    start_30_days, end_30_days = get_latest_30_days_dates()
 
     output_data = {
-        "data_source": "pepy.tech_v2",
+        "package": PACKAGE_NAME,
+        "source": "https://pepy.tech/pepy-api",
         "last_updated": datetime.now(timezone.utc).isoformat(),
     }
 
@@ -165,9 +231,8 @@ def create_output_data(
             most_recent_date = dates[0]
             output_data["most_recent_data_date"] = most_recent_date
 
-    # Add package and reporting period
-    output_data["package"] = PACKAGE_NAME
-    output_data["reporting_period"] = {
+    # Add monthly reporting period
+    output_data["monthly_reporting_period"] = {
         "start_date": first_previous_month.strftime("%Y-%m-%d"),
         "end_date": last_previous_month.strftime("%Y-%m-%d"),
     }
@@ -188,6 +253,10 @@ def create_output_data(
                 # Group daily downloads values together
                 output_data["daily_downloads"] = recent_total
                 output_data["daily_downloads_human"] = humanize_number(recent_total)
+
+    # Group latest 30 days downloads values together (raw + human)
+    output_data["last_30d_downloads"] = latest_30_days_downloads
+    output_data["last_30d_downloads_human"] = humanize_number(latest_30_days_downloads)
 
     # Group all download values together in one section
     output_data["monthly_downloads"] = monthly_downloads
@@ -229,9 +298,17 @@ def main() -> int:
         logger.error("Failed to extract monthly downloads from API response")
         return 1
 
-    logger.info(f"Extracted monthly downloads: {monthly_downloads}")
+    latest_30_days_downloads = extract_latest_30_days_downloads(api_data)
+    if latest_30_days_downloads is None:
+        logger.error("Failed to extract latest 30 days downloads from API response")
+        return 1
 
-    output_data = create_output_data(monthly_downloads, api_data)
+    logger.info(f"Extracted monthly downloads: {monthly_downloads}")
+    logger.info(f"Extracted latest 30 days downloads: {latest_30_days_downloads}")
+
+    output_data = create_output_data(
+        monthly_downloads, latest_30_days_downloads, api_data
+    )
 
     if not save_yaml_data(output_data):
         logger.error("Failed to save data to YAML file")

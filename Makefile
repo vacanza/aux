@@ -25,14 +25,14 @@ install-dev:
 
 # Code quality targets
 lint:
-	ruff check scripts/
+	ruff check .
 
 format:
-	ruff format scripts/
+	ruff format .
 
 check:
-	ruff check scripts/
-	ruff format --check scripts/
+	ruff check .
+	ruff format --check .
 
 # Full quality check including tests
 quality: lint format test

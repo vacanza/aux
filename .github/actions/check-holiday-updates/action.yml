@@ -1,0 +1,43 @@
+name: 'Check Holiday Updates'
+description: 'Monitor holiday file freshness and create GitHub issues for outdated files'
+author: 'Arkadii Yakovets'
+
+inputs:
+  files_path:
+    description: 'Path to directory containing holiday files to check'
+    required: true
+  threshold_days:
+    description: 'Age threshold for files in days'
+    required: false
+    default: '180'
+  dry_run:
+    description: 'Dry run mode (no issues created)'
+    required: false
+    default: 'false'
+  github_token:
+    description: 'GitHub token for API access'
+    required: true
+
+outputs:
+  outdated_files:
+    description: 'List of outdated files found'
+  outdated_files_count:
+    description: 'Total number of outdated files found'
+  issues_created:
+    description: 'Number of GitHub issues created'
+
+runs:
+  using: 'docker'
+  image: 'Dockerfile'
+  args:
+    - '--repo-path'
+    - '/github/workspace'
+    - '--files-path'
+    - ${{ inputs.files_path }}
+    - '--threshold-days'
+    - ${{ inputs.threshold_days }}
+    - '--github-token'
+    - ${{ inputs.github_token }}
+    - ${{ inputs.dry_run == 'true' && '--dry-run' || '' }}
+    - '--output'
+    - '/github/workspace/freshness_results.json'

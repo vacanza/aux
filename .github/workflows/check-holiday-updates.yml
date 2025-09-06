@@ -1,0 +1,31 @@
+name: Check Holiday Updates
+
+on:
+  schedule:
+    - cron: '0 2 1 * *'  # Run monthly
+  workflow_dispatch:
+
+jobs:
+  check-updates:
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8
+
+      - name: Check Holiday Updates
+        id: check-updates
+        uses: vacanza/aux/.github/actions/check-holiday-updates@main
+        with:
+          dry_run: 'true'
+          files_path: 'holidays/countries'
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          threshold_days: '180'
+
+      - name: Display results
+        run: |
+          echo "Outdated files: ${{ steps.check-updates.outputs.outdated_files }}"
+          echo "Total outdated files: ${{ steps.check-updates.outputs.outdated_files_count }}"
+          echo "Issues created: ${{ steps.check-updates.outputs.issues_created }}"

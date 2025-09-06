@@ -20,4 +20,4 @@ COPY issue_body_template.md .
 RUN chmod +x check_holiday_updates.py
 
 # Set the entrypoint
-ENTRYPOINT ["python", "check_holiday_updates.py"]
+ENTRYPOINT ["python", "/action/check_holiday_updates.py"]

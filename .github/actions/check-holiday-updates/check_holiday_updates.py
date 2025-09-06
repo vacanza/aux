@@ -8,6 +8,7 @@ directories and identifies files that may need updating based on configurable ag
 
 import logging
 import os
+import subprocess
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -70,14 +71,79 @@ class HolidayUpdatesChecker:
             logger.warning("PyGithub not available, GitHub integration disabled")
 
     def get_file_age_days(self, file_path: Path) -> int:
-        """Get file age in days since last modification."""
+        """Get file age in days since last commit."""
         try:
-            mtime = file_path.stat().st_mtime
-            age = datetime.now() - datetime.fromtimestamp(mtime)
-            return age.days
+            # Get the last commit date for this file using git log
+            result = subprocess.run(
+                ["git", "log", "-1", "--format=%ct", "--", str(file_path)],
+                cwd=self.repo_path,
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+
+            if result.stdout.strip():
+                # Convert Unix timestamp to datetime
+                last_commit_timestamp = int(result.stdout.strip())
+                last_commit_date = datetime.fromtimestamp(last_commit_timestamp)
+                age = datetime.now() - last_commit_date
+                return age.days
+            else:
+                # File has no commits, use filesystem modification time as fallback
+                logger.warning(
+                    f"No commit history found for {file_path}, using filesystem modification time"
+                )
+                mtime = file_path.stat().st_mtime
+                age = datetime.now() - datetime.fromtimestamp(mtime)
+                return age.days
+
+        except subprocess.CalledProcessError as e:
+            logger.error(f"Error getting git commit date for {file_path}: {e}")
+            # Fallback to filesystem modification time
+            try:
+                mtime = file_path.stat().st_mtime
+                age = datetime.now() - datetime.fromtimestamp(mtime)
+                return age.days
+            except OSError as e2:
+                logger.error(f"Error getting file age for {file_path}: {e2}")
+                return 0
         except OSError as e:
             logger.error(f"Error getting file age for {file_path}: {e}")
             return 0
+
+    def get_last_commit_date(self, file_path: Path) -> datetime:
+        """Get the last commit date for a file."""
+        try:
+            # Get the last commit date for this file using git log
+            result = subprocess.run(
+                ["git", "log", "-1", "--format=%ct", "--", str(file_path)],
+                cwd=self.repo_path,
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+
+            if result.stdout.strip():
+                # Convert Unix timestamp to datetime
+                last_commit_timestamp = int(result.stdout.strip())
+                return datetime.fromtimestamp(last_commit_timestamp)
+            else:
+                # File has no commits, use filesystem modification time as fallback
+                logger.warning(
+                    f"No commit history found for {file_path}, using filesystem modification time"
+                )
+                mtime = file_path.stat().st_mtime
+                return datetime.fromtimestamp(mtime)
+
+        except (subprocess.CalledProcessError, OSError) as e:
+            logger.error(f"Error getting git commit date for {file_path}: {e}")
+            # Fallback to filesystem modification time
+            try:
+                mtime = file_path.stat().st_mtime
+                return datetime.fromtimestamp(mtime)
+            except OSError:
+                # Ultimate fallback to current time
+                return datetime.now()
 
     def extract_name_from_path(self, file_path: Path) -> str:
         """Extract a human-readable name from file path."""
@@ -108,7 +174,8 @@ class HolidayUpdatesChecker:
             age_days = self.get_file_age_days(file_path)
 
             if age_days > threshold_days:
-                last_modified = datetime.fromtimestamp(file_path.stat().st_mtime)
+                # Get the last commit date for this file
+                last_modified = self.get_last_commit_date(file_path)
                 file_info = {
                     "path": str(file_path.relative_to(self.repo_path)),
                     "name": self.extract_name_from_path(file_path),

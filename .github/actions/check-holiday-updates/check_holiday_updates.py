@@ -55,6 +55,9 @@ class HolidayUpdatesChecker:
         self.threshold_days = threshold_days
         self.dry_run = dry_run
 
+        # Configure git to trust the workspace directory (fixes dubious ownership issue in GitHub Actions)
+        self._configure_git_safe_directory()
+
         self.github: Optional[Github] = None
         self.repo: Optional[Any] = None
         if github_token and Github is not None and Auth is not None:
@@ -69,6 +72,31 @@ class HolidayUpdatesChecker:
                 self.repo = None
         elif github_token and (Github is None or Auth is None):
             logger.warning("PyGithub not available, GitHub integration disabled")
+
+    def _configure_git_safe_directory(self) -> None:
+        """Configure git to trust the workspace directory."""
+        try:
+            safe_dir_result = subprocess.run(
+                [
+                    "git",
+                    "config",
+                    "--global",
+                    "--add",
+                    "safe.directory",
+                    str(self.repo_path),
+                ],
+                cwd=self.repo_path,
+                capture_output=True,
+                text=True,
+            )
+            if safe_dir_result.returncode != 0:
+                logger.warning(
+                    f"Failed to configure safe directory: {safe_dir_result.stderr}"
+                )
+            else:
+                logger.debug(f"Configured git safe directory: {self.repo_path}")
+        except Exception as e:
+            logger.warning(f"Error configuring git safe directory: {e}")
 
     def get_file_age_days(self, file_path: Path) -> int:
         """Get file age in days since last commit."""

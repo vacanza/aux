@@ -286,8 +286,13 @@ class TestMainFunction:
 
     @patch("check_holiday_updates.HolidayUpdatesChecker")
     @patch.dict(os.environ, {"INPUT_DRY_RUN": "true"})
-    def test_main_dry_run(self, mock_checker_class):
+    @patch("check_holiday_updates.os.path.exists")
+    @patch("check_holiday_updates.os.listdir")
+    def test_main_dry_run(self, mock_listdir, mock_exists, mock_checker_class):
         """Test main function with dry run."""
+        mock_exists.return_value = True
+        mock_listdir.return_value = [".git", "holidays"]
+
         mock_checker = Mock()
         mock_checker.run.return_value = {
             "outdated_files": [],
@@ -305,8 +310,15 @@ class TestMainFunction:
     @patch("check_holiday_updates.HolidayUpdatesChecker")
     @patch.dict(os.environ, {"INPUT_DRY_RUN": "true"})
     @patch("check_holiday_updates.sys.exit")
-    def test_main_with_errors(self, mock_exit, mock_checker_class):
+    @patch("check_holiday_updates.os.path.exists")
+    @patch("check_holiday_updates.os.listdir")
+    def test_main_with_errors(
+        self, mock_listdir, mock_exists, mock_exit, mock_checker_class
+    ):
         """Test main function with errors."""
+        mock_exists.return_value = True
+        mock_listdir.return_value = [".git", "holidays"]
+
         mock_checker = Mock()
         mock_checker.run.return_value = {
             "outdated_files": [],

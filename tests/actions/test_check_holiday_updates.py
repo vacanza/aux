@@ -190,15 +190,17 @@ class TestHolidayUpdatesChecker:
             "directory_type": "countries",
         }
 
+        # Test with template file (should find it from action directory)
         body = self.checker.create_issue_body(file_info)
 
-        assert "Holiday Data Updates Alert" in body
-        assert "holidays/countries/south_korea.py" in body
-        assert "200 days" in body
-        assert "180 days" in body
+        # Should use the full template
+        assert "## Holiday Data Updates Alert" in body
+        assert "**File:** `holidays/countries/south_korea.py`" in body
+        assert "**Last Modified:** January 01, 2023" in body
+        assert "**Age:** 200 days (threshold: 180 days)" in body
+        assert "**Type:** Countries" in body
         assert "South Korea" in body
-        assert "Overdue by:" in body
-        assert "20 days" in body
+        assert "**Overdue by:** 20 days" in body
 
     def test_find_existing_issue_no_repo(self):
         """Test finding existing issue when no repo available."""
@@ -278,40 +280,19 @@ class TestHolidayUpdatesChecker:
         assert "timestamp" in result
         assert isinstance(result["outdated_files"], list)
 
-    @patch.dict(os.environ, {"GITHUB_OUTPUT": "/tmp/github_output"})
-    def test_set_github_outputs(self):
-        """Test setting GitHub Actions outputs."""
-        outdated_files = [
-            {"name": "File1", "path": "holidays/file1.py"},
-            {"name": "File2", "path": "holidays/file2.py"},
-        ]
-        stats = {"created": 2, "skipped": 0, "errors": 0}
-
-        with tempfile.NamedTemporaryFile(mode="w", delete=False) as f:
-            output_file = f.name
-
-        with patch.dict(os.environ, {"GITHUB_OUTPUT": output_file}):
-            self.checker._set_github_outputs(outdated_files, stats)
-
-        with open(output_file) as f:
-            content = f.read()
-
-        assert "outdated_files=" in content
-        assert "outdated_files_count=2" in content
-        assert "issues_created=2" in content
-
-        os.unlink(output_file)
-
 
 class TestMainFunction:
     """Test cases for main function and argument parsing."""
 
     @patch("check_holiday_updates.HolidayUpdatesChecker")
-    @patch("check_holiday_updates.sys.argv", ["check_holiday_updates.py", "--dry-run"])
+    @patch.dict(os.environ, {"INPUT_DRY_RUN": "true"})
     def test_main_dry_run(self, mock_checker_class):
         """Test main function with dry run."""
         mock_checker = Mock()
-        mock_checker.run.return_value = {"stats": {"errors": 0}}
+        mock_checker.run.return_value = {
+            "outdated_files": [],
+            "stats": {"errors": 0, "created": 0},
+        }
         mock_checker_class.return_value = mock_checker
 
         from check_holiday_updates import main
@@ -322,12 +303,15 @@ class TestMainFunction:
         mock_checker.run.assert_called_once()
 
     @patch("check_holiday_updates.HolidayUpdatesChecker")
-    @patch("check_holiday_updates.sys.argv", ["check_holiday_updates.py", "--dry-run"])
+    @patch.dict(os.environ, {"INPUT_DRY_RUN": "true"})
     @patch("check_holiday_updates.sys.exit")
     def test_main_with_errors(self, mock_exit, mock_checker_class):
         """Test main function with errors."""
         mock_checker = Mock()
-        mock_checker.run.return_value = {"stats": {"errors": 1}}
+        mock_checker.run.return_value = {
+            "outdated_files": [],
+            "stats": {"errors": 1, "created": 0},
+        }
         mock_checker_class.return_value = mock_checker
 
         from check_holiday_updates import main

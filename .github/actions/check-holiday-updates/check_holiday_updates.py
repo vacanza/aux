@@ -6,8 +6,6 @@ This script checks the modification dates of holiday files in the countries/ and
 directories and identifies files that may need updating based on configurable age thresholds.
 """
 
-import argparse
-import json
 import logging
 import os
 import sys
@@ -63,8 +61,11 @@ class HolidayUpdatesChecker:
                 auth = Auth.Token(github_token)
                 self.github = Github(auth=auth)
                 self.repo = self.github.get_repo("vacanza/holidays")
+                logger.debug("GitHub client initialized successfully")
             except Exception as e:
                 logger.warning(f"Failed to initialize GitHub client: {e}")
+                self.github = None
+                self.repo = None
         elif github_token and (Github is None or Auth is None):
             logger.warning("PyGithub not available, GitHub integration disabled")
 
@@ -148,6 +149,7 @@ class HolidayUpdatesChecker:
         last_modified = datetime.fromisoformat(file_info["last_modified"])
         formatted_date = last_modified.strftime("%B %d, %Y")
 
+        # Use template from the same directory as this script
         template_path = Path(__file__).parent / "issue_body_template.md"
         try:
             with open(template_path, encoding="utf-8") as f:
@@ -155,6 +157,7 @@ class HolidayUpdatesChecker:
         except FileNotFoundError:
             logger.error(f"Template file not found: {template_path}")
             return f"File {file_info['path']} needs updating (last modified: {formatted_date})"
+
         return template.format(
             path=file_info["path"],
             formatted_date=formatted_date,
@@ -246,70 +249,56 @@ class HolidayUpdatesChecker:
         logger.info(f"  - Issues created: {stats['created']}")
         logger.info(f"  - Errors: {stats['errors']}")
 
-        self._set_github_outputs(outdated_files, stats)
-
         return {
             "outdated_files": outdated_files,
             "stats": stats,
             "timestamp": datetime.now().isoformat(),
         }
 
-    def _set_github_outputs(self, outdated_files: List[Dict], stats: Dict) -> None:
-        """Set GitHub Actions output variables."""
-        if os.getenv("GITHUB_OUTPUT"):
-            with open(os.getenv("GITHUB_OUTPUT"), "a") as f:
-                files_json = json.dumps([f["path"] for f in outdated_files])
-                f.write(f"outdated_files={files_json}\n")
-                f.write(f"outdated_files_count={len(outdated_files)}\n")
-                f.write(f"issues_created={stats['created']}\n")
+
+def write_github_output(output_name: str, value: str) -> None:
+    """Write output to GitHub Actions output file."""
+    output_file = os.getenv("GITHUB_OUTPUT")
+    if output_file:
+        with open(output_file, "a", encoding="utf-8") as f:
+            f.write(f"{output_name}={value}\n")
 
 
 def main():
     """Main entry point."""
-    parser = argparse.ArgumentParser(description="Check holiday file updates")
-    parser.add_argument(
-        "--repo-path",
-        default=".",
-        help="Path to repository root (default: current directory)",
-    )
-    parser.add_argument(
-        "--files-path",
-        default="holidays",
-        help="Path to directory containing holiday files to check (default: holidays)",
-    )
-    parser.add_argument(
-        "--threshold-days",
-        type=int,
-        default=180,
-        help="Age threshold for files in days (default: 180)",
-    )
-    parser.add_argument("--github-token", help="GitHub token for API access")
-    parser.add_argument(
-        "--dry-run",
-        action="store_true",
-        help="Don't create actual issues, just log what would be done",
-    )
-    parser.add_argument("--output", help="Output file for results (JSON format)")
-
-    args = parser.parse_args()
-
-    github_token = args.github_token or os.getenv("GITHUB_TOKEN")
+    # Read configuration from environment variables
+    repo_path = os.getenv("GITHUB_WORKSPACE", ".")
+    files_path = os.getenv("INPUT_FILES_PATH", "holidays")
+    threshold_days = int(os.getenv("INPUT_THRESHOLD_DAYS", "180"))
+    github_token = os.getenv("INPUT_GITHUB_TOKEN") or os.getenv("GITHUB_TOKEN")
+    dry_run = os.getenv("INPUT_DRY_RUN", "false").lower() == "true"
 
     checker = HolidayUpdatesChecker(
-        repo_path=args.repo_path,
-        files_path=args.files_path,
-        threshold_days=args.threshold_days,
+        repo_path=repo_path,
+        files_path=files_path,
+        threshold_days=threshold_days,
         github_token=github_token,
-        dry_run=args.dry_run,
+        dry_run=dry_run,
     )
 
     try:
         result = checker.run()
 
-        if args.output:
-            with open(args.output, "w") as f:
-                json.dump(result, f, indent=2)
-            logger.info(f"Results saved to {args.output}")
+        # Write outputs for GitHub Actions
+        write_github_output("outdated_files", str(len(result["outdated_files"])))
+        write_github_output("outdated_files_count", str(len(result["outdated_files"])))
+        write_github_output("issues_created", str(result["stats"]["created"]))
+
+        # Print summary information
+        print("📊 Summary:")
+        print(f"  • Outdated files found: {len(result['outdated_files'])}")
+        print(f"  • Issues created: {result['stats']['created']}")
+        print(f"  • Errors: {result['stats']['errors']}")
+
+        if result["outdated_files"]:
+            print("\n📁 Outdated files:")
+            for file_info in result["outdated_files"]:
+                print(f"  • {file_info['path']} ({file_info['age_days']} days old)")
 
         if result["stats"]["errors"] > 0:
             sys.exit(1)

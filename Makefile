@@ -31,8 +31,13 @@ format:
 	ruff format .
 
 check:
+	pre-commit run --all-files
 	ruff check .
 	ruff format --check .
+
+check-test: \
+	check \
+	test
 
 # Full quality check including tests
 quality: lint format test

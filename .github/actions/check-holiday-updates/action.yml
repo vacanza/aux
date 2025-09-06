@@ -29,15 +29,8 @@ outputs:
 runs:
   using: 'docker'
   image: 'Dockerfile'
-  args:
-    - '--repo-path'
-    - '/github/workspace'
-    - '--files-path'
-    - ${{ inputs.files_path }}
-    - '--threshold-days'
-    - ${{ inputs.threshold_days }}
-    - '--github-token'
-    - ${{ inputs.github_token }}
-    - ${{ inputs.dry_run == 'true' && '--dry-run' || '' }}
-    - '--output'
-    - '/github/workspace/freshness_results.json'
+  env:
+    INPUT_FILES_PATH: ${{ inputs.files_path }}
+    INPUT_THRESHOLD_DAYS: ${{ inputs.threshold_days }}
+    INPUT_DRY_RUN: ${{ inputs.dry_run }}
+    INPUT_GITHUB_TOKEN: ${{ inputs.github_token }}

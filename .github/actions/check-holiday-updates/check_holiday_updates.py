@@ -334,11 +334,29 @@ def write_github_output(output_name: str, value: str) -> None:
 def main():
     """Main entry point."""
     # Read configuration from environment variables
-    repo_path = os.getenv("GITHUB_WORKSPACE", ".")
+    # In GitHub Actions Docker environment, the workspace is always mounted at /github/workspace
+    repo_path = "/github/workspace"
+
     files_path = os.getenv("INPUT_FILES_PATH", "holidays")
     threshold_days = int(os.getenv("INPUT_THRESHOLD_DAYS", "180"))
     github_token = os.getenv("INPUT_GITHUB_TOKEN") or os.getenv("GITHUB_TOKEN")
     dry_run = os.getenv("INPUT_DRY_RUN", "false").lower() == "true"
+
+    # Debug information
+    logger.info(f"Repository path: {repo_path}")
+    logger.info(f"Files path: {files_path}")
+    logger.info(f"Repository path exists: {os.path.exists(repo_path)}")
+
+    if os.path.exists(repo_path):
+        logger.info(f"Repository path contents: {os.listdir(repo_path)}")
+        # Check if it's a git repository
+        if (Path(repo_path) / ".git").exists():
+            logger.info("Git repository found")
+        else:
+            logger.warning("No .git directory found in repository path")
+    else:
+        logger.error(f"Repository path does not exist: {repo_path}")
+        sys.exit(1)
 
     checker = HolidayUpdatesChecker(
         repo_path=repo_path,

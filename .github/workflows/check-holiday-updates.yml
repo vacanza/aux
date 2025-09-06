@@ -15,6 +15,13 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8
 
+      - name: List workspace contents
+        run: |
+          echo "Contents of /github/workspace:"
+          ls -la /github/workspace
+          echo "Looking for holidays directory:"
+          find /github/workspace -name "*holiday*" -type d || echo "No holiday directories found"
+
       - name: Check Holiday Updates
         id: check-updates
         uses: vacanza/aux/.github/actions/check-holiday-updates@main

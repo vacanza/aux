@@ -76,13 +76,62 @@ class HolidayUpdatesChecker:
             # Get the last commit date for this file using git log
             # Use relative path from repository root
             relative_path = file_path.relative_to(self.repo_path)
-            result = subprocess.run(
-                ["git", "log", "-1", "--format=%ct", "--", str(relative_path)],
+
+            # Debug logging
+            logger.debug(f"Running git command for file: {relative_path}")
+            logger.debug(f"Working directory: {self.repo_path}")
+            logger.debug(f"File exists: {file_path.exists()}")
+
+            # Check if git repository is properly initialized
+            git_status = subprocess.run(
+                ["git", "status", "--porcelain"],
                 cwd=self.repo_path,
                 capture_output=True,
                 text=True,
-                check=True,
             )
+            if git_status.returncode != 0:
+                logger.warning(
+                    f"Git repository not properly initialized: {git_status.stderr}"
+                )
+                # Fallback to filesystem modification time
+                mtime = file_path.stat().st_mtime
+                age = datetime.now() - datetime.fromtimestamp(mtime)
+                return age.days
+
+            # Try different git commands in order of preference
+            git_commands = [
+                [
+                    "git",
+                    "log",
+                    "-1",
+                    "--format=%ct",
+                    "--follow",
+                    "--",
+                    str(relative_path),
+                ],
+                ["git", "log", "-1", "--format=%ct", "--", str(relative_path)],
+                ["git", "log", "-1", "--format=%ct", "--all", "--", str(relative_path)],
+            ]
+
+            result = None
+            for cmd in git_commands:
+                try:
+                    result = subprocess.run(
+                        cmd,
+                        cwd=self.repo_path,
+                        capture_output=True,
+                        text=True,
+                        check=True,
+                    )
+                    if result.stdout.strip():
+                        break
+                except subprocess.CalledProcessError:
+                    continue
+
+            if not result or not result.stdout.strip():
+                raise subprocess.CalledProcessError(
+                    1, "git", "No git command succeeded"
+                )
 
             if result.stdout.strip():
                 # Convert Unix timestamp to datetime
@@ -101,10 +150,17 @@ class HolidayUpdatesChecker:
 
         except subprocess.CalledProcessError as e:
             logger.error(f"Error getting git commit date for {file_path}: {e}")
+            logger.error(f"Git command stderr: {e.stderr}")
+            logger.error(f"Git command stdout: {e.stdout}")
+            logger.error(f"Git command return code: {e.returncode}")
+
             # Fallback to filesystem modification time
             try:
                 mtime = file_path.stat().st_mtime
                 age = datetime.now() - datetime.fromtimestamp(mtime)
+                logger.warning(
+                    f"Using filesystem modification time for {file_path}: {age.days} days"
+                )
                 return age.days
             except OSError as e2:
                 logger.error(f"Error getting file age for {file_path}: {e2}")

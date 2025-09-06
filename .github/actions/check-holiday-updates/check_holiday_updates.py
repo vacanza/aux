@@ -74,8 +74,10 @@ class HolidayUpdatesChecker:
         """Get file age in days since last commit."""
         try:
             # Get the last commit date for this file using git log
+            # Use relative path from repository root
+            relative_path = file_path.relative_to(self.repo_path)
             result = subprocess.run(
-                ["git", "log", "-1", "--format=%ct", "--", str(file_path)],
+                ["git", "log", "-1", "--format=%ct", "--", str(relative_path)],
                 cwd=self.repo_path,
                 capture_output=True,
                 text=True,

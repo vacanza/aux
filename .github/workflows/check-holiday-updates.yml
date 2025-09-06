@@ -25,7 +25,7 @@ jobs:
           dry_run: 'true'
           files_path: 'holidays/countries'
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          threshold_days: '180'
+          threshold_days: '365'
 
       - name: Display results
         run: |

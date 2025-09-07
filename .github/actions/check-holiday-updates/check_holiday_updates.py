@@ -346,7 +346,6 @@ class HolidayUpdatesChecker:
             age_days=file_info["age_days"],
             threshold_days=file_info["threshold_days"],
             name=file_info["name"],
-            overdue_days=file_info["age_days"] - file_info["threshold_days"],
         )
 
     def find_existing_issue(self, file_info: Dict) -> Optional[Any]:
@@ -490,12 +489,12 @@ def main():
         sys.exit(1)
 
     checker = HolidayUpdatesChecker(
-        repo_path=repo_path,
-        paths=paths,
-        threshold_days=threshold_days,
+        repo_path,
+        paths,
+        dry_run=dry_run,
         github_token=github_token,
         repository=repository,
-        dry_run=dry_run,
+        threshold_days=threshold_days,
     )
 
     result = checker.run()

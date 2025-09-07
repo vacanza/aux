@@ -28,7 +28,6 @@ outputs:
   outdated_files_count:
     description: Total number of outdated files found
 
-
 runs:
   using: docker
   image: Dockerfile

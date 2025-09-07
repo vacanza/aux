@@ -314,11 +314,13 @@ class TestHolidayUpdatesChecker:
 
         # Should use the full template
         assert "## Holiday Data Updates Alert" in body
-        assert "**File:** `holidays/countries/south_korea.py`" in body
+        assert "**Path:** `holidays/countries/south_korea.py`" in body
         assert "**Last Modified:** January 01, 2023" in body
         assert "**Age:** 200 days (threshold: 180 days)" in body
         assert "South Korea" in body
-        assert "**Overdue by:** 20 days" in body
+        # Additional Information section should be removed
+        assert "**Overdue by:**" not in body
+        assert "Additional Information" not in body
 
     def test_find_existing_issue_no_repo(self):
         """Test finding existing issue when no repo available."""

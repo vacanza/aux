@@ -392,9 +392,8 @@ class HolidayUpdatesChecker:
         try:
             title = self.create_issue_title(file_info)
             body = self.create_issue_body(file_info)
-            labels = ("holiday-updates", "maintenance", "data-update")
 
-            issue = self.repo.create_issue(title=title, body=body, labels=labels)
+            issue = self.repo.create_issue(title=title, body=body)
 
             logger.info(f"Created issue #{issue.number} for {file_info['path']}")
             return True

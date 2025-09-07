@@ -118,13 +118,12 @@ class HolidayUpdatesChecker:
                 text=True,
             )
             if git_status.returncode != 0:
-                logger.warning(
+                logger.error(
                     f"Git repository not properly initialized: {git_status.stderr}"
                 )
-                # Fallback to filesystem modification time
-                mtime = file_path.stat().st_mtime
-                age = datetime.now() - datetime.fromtimestamp(mtime)
-                return age.days
+                raise RuntimeError(
+                    f"Git repository not accessible: {git_status.stderr}"
+                )
 
             # Try different git commands in order of preference
             git_commands = [
@@ -157,52 +156,35 @@ class HolidayUpdatesChecker:
                     continue
 
             if not result or not result.stdout.strip():
-                raise subprocess.CalledProcessError(
-                    1, "git", "No git command succeeded"
+                raise RuntimeError(
+                    f"No git commit history found for file: {relative_path}"
                 )
 
-            if result.stdout.strip():
-                # Convert Unix timestamp to datetime
-                last_commit_timestamp = int(result.stdout.strip())
-                last_commit_date = datetime.fromtimestamp(last_commit_timestamp)
-                age = datetime.now() - last_commit_date
-                return age.days
-            else:
-                # File has no commits, use filesystem modification time as fallback
-                logger.warning(
-                    f"No commit history found for {file_path}, using filesystem modification time"
-                )
-                mtime = file_path.stat().st_mtime
-                age = datetime.now() - datetime.fromtimestamp(mtime)
-                return age.days
+            # Convert Unix timestamp to datetime
+            last_commit_timestamp = int(result.stdout.strip())
+            last_commit_date = datetime.fromtimestamp(last_commit_timestamp)
+            age = datetime.now() - last_commit_date
+            return age.days
 
         except subprocess.CalledProcessError as e:
             logger.error(f"Error getting git commit date for {file_path}: {e}")
             logger.error(f"Git command stderr: {e.stderr}")
             logger.error(f"Git command stdout: {e.stdout}")
             logger.error(f"Git command return code: {e.returncode}")
-
-            # Fallback to filesystem modification time
-            try:
-                mtime = file_path.stat().st_mtime
-                age = datetime.now() - datetime.fromtimestamp(mtime)
-                logger.warning(
-                    f"Using filesystem modification time for {file_path}: {age.days} days"
-                )
-                return age.days
-            except OSError as e2:
-                logger.error(f"Error getting file age for {file_path}: {e2}")
-                return 0
+            raise RuntimeError(
+                f"Failed to get git commit date for {file_path}: {e}"
+            ) from e
         except OSError as e:
-            logger.error(f"Error getting file age for {file_path}: {e}")
-            return 0
+            logger.error(f"Error accessing file {file_path}: {e}")
+            raise RuntimeError(f"Failed to access file {file_path}: {e}") from e
 
     def get_last_commit_date(self, file_path: Path) -> datetime:
         """Get the last commit date for a file."""
         try:
             # Get the last commit date for this file using git log
+            relative_path = file_path.relative_to(self.repo_path)
             result = subprocess.run(
-                ["git", "log", "-1", "--format=%ct", "--", str(file_path)],
+                ["git", "log", "-1", "--format=%ct", "--", str(relative_path)],
                 cwd=self.repo_path,
                 capture_output=True,
                 text=True,
@@ -214,22 +196,18 @@ class HolidayUpdatesChecker:
                 last_commit_timestamp = int(result.stdout.strip())
                 return datetime.fromtimestamp(last_commit_timestamp)
             else:
-                # File has no commits, use filesystem modification time as fallback
-                logger.warning(
-                    f"No commit history found for {file_path}, using filesystem modification time"
+                raise RuntimeError(
+                    f"No git commit history found for file: {relative_path}"
                 )
-                mtime = file_path.stat().st_mtime
-                return datetime.fromtimestamp(mtime)
 
-        except (subprocess.CalledProcessError, OSError) as e:
-            logger.error(f"Error getting git commit date for {file_path}: {e}")
-            # Fallback to filesystem modification time
-            try:
-                mtime = file_path.stat().st_mtime
-                return datetime.fromtimestamp(mtime)
-            except OSError:
-                # Ultimate fallback to current time
-                return datetime.now()
+        except subprocess.CalledProcessError as e:
+            logger.error(f"Error getting last commit date for {file_path}: {e}")
+            raise RuntimeError(
+                f"Failed to get git commit date for {file_path}: {e}"
+            ) from e
+        except OSError as e:
+            logger.error(f"Error accessing file {file_path}: {e}")
+            raise RuntimeError(f"Failed to access file {file_path}: {e}") from e
 
     def extract_name_from_path(self, file_path: Path) -> str:
         """Extract a human-readable name from file path."""

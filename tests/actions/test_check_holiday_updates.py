@@ -25,13 +25,13 @@ class TestHolidayUpdatesChecker:
         """Set up test fixtures."""
         self.temp_dir = tempfile.mkdtemp()
         self.repo_path = Path(self.temp_dir)
-        self.files_path = self.repo_path / "holidays"
+        self.paths_dir = self.repo_path / "holidays"
 
-        self.files_path.mkdir(parents=True)
+        self.paths_dir.mkdir(parents=True)
 
         self.checker = HolidayUpdatesChecker(
             repo_path=str(self.repo_path),
-            files_path="holidays",
+            paths=["holidays"],
             threshold_days=180,
             dry_run=True,
         )
@@ -46,7 +46,7 @@ class TestHolidayUpdatesChecker:
         """Test initialization with default values."""
         checker = HolidayUpdatesChecker(repo_path=str(self.repo_path))
         assert checker.repo_path == Path(self.repo_path)
-        assert checker.files_path == Path("holidays")
+        assert checker.paths == ["holidays"]
         assert checker.threshold_days == 180
         assert checker.dry_run is False
         assert checker.github is None
@@ -56,12 +56,12 @@ class TestHolidayUpdatesChecker:
         """Test initialization with custom values."""
         checker = HolidayUpdatesChecker(
             repo_path=str(self.repo_path),
-            files_path="custom/holidays",
+            paths=["custom/holidays"],
             threshold_days=90,
             github_token="test_token",
             dry_run=True,
         )
-        assert checker.files_path == Path("custom/holidays")
+        assert checker.paths == ["custom/holidays"]
         assert checker.threshold_days == 90
         assert checker.dry_run is True
 
@@ -169,7 +169,7 @@ class TestHolidayUpdatesChecker:
 
     def test_scan_directory_empty(self):
         """Test scanning empty directory."""
-        result = self.checker.scan_directory(self.files_path, 180)
+        result = self.checker.scan_directory(self.paths_dir, 180)
         assert result == []
 
     @patch("check_holiday_updates.subprocess.run")
@@ -221,16 +221,16 @@ class TestHolidayUpdatesChecker:
 
         mock_subprocess.side_effect = mock_git_side_effect
 
-        recent_file = self.files_path / "recent.py"
+        recent_file = self.paths_dir / "recent.py"
         recent_file.write_text("# Recent file")
 
-        old_file = self.files_path / "old.py"
+        old_file = self.paths_dir / "old.py"
         old_file.write_text("# Old file")
 
-        init_file = self.files_path / "__init__.py"
+        init_file = self.paths_dir / "__init__.py"
         init_file.write_text("# Init file")
 
-        result = self.checker.scan_directory(self.files_path, 180)
+        result = self.checker.scan_directory(self.paths_dir, 180)
 
         assert len(result) == 2  # old.py and __init__.py should be outdated
         file_paths = [item["path"] for item in result]
@@ -274,7 +274,7 @@ class TestHolidayUpdatesChecker:
 
         mock_subprocess.side_effect = mock_git_side_effect
 
-        test_file = self.files_path / "test_file.py"
+        test_file = self.paths_dir / "test_file.py"
         test_file.write_text("# Test file")
 
         result = self.checker.check_freshness()
@@ -297,7 +297,6 @@ class TestHolidayUpdatesChecker:
             "age_days": 200,
             "threshold_days": 180,
             "last_modified": "2023-01-01T00:00:00",
-            "directory_type": "countries",
         }
 
         # Test with template file (should find it from action directory)
@@ -308,7 +307,6 @@ class TestHolidayUpdatesChecker:
         assert "**File:** `holidays/countries/south_korea.py`" in body
         assert "**Last Modified:** January 01, 2023" in body
         assert "**Age:** 200 days (threshold: 180 days)" in body
-        assert "**Type:** Countries" in body
         assert "South Korea" in body
         assert "**Overdue by:** 20 days" in body
 
@@ -395,9 +393,9 @@ class TestMainFunction:
     """Test cases for main function and argument parsing."""
 
     @patch("check_holiday_updates.HolidayUpdatesChecker")
-    @patch.dict(os.environ, {"INPUT_DRY_RUN": "true"})
     @patch("check_holiday_updates.os.path.exists")
     @patch("check_holiday_updates.os.listdir")
+    @patch("check_holiday_updates.sys.argv", ["script.py", "--dry-run", "true"])
     def test_main_dry_run(self, mock_listdir, mock_exists, mock_checker_class):
         """Test main function with dry run."""
         mock_exists.return_value = True
@@ -418,10 +416,10 @@ class TestMainFunction:
         mock_checker.run.assert_called_once()
 
     @patch("check_holiday_updates.HolidayUpdatesChecker")
-    @patch.dict(os.environ, {"INPUT_DRY_RUN": "true"})
     @patch("check_holiday_updates.sys.exit")
     @patch("check_holiday_updates.os.path.exists")
     @patch("check_holiday_updates.os.listdir")
+    @patch("check_holiday_updates.sys.argv", ["script.py", "--dry-run", "true"])
     def test_main_with_errors(
         self, mock_listdir, mock_exists, mock_exit, mock_checker_class
     ):

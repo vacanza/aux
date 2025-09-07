@@ -3,7 +3,6 @@
 **File:** `{path}`
 **Last Modified:** {formatted_date}
 **Age:** {age_days} days (threshold: {threshold_days} days)
-**Type:** {directory_type}
 
 This holiday data file hasn't been updated recently and may need verification.
 

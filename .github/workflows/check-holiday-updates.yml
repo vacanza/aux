@@ -15,6 +15,11 @@ on:
         required: false
         default: ''
         type: string
+      repository:
+        description: 'Repository where issues will be created (owner/repo)'
+        required: false
+        default: 'vacanza/holidays'
+        type: string
       threshold_days:
         description: 'Age threshold for files in days'
         required: false
@@ -42,7 +47,7 @@ jobs:
           dry_run: ${{ inputs.dry_run || false }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
           paths: ${{ inputs.paths || 'holidays/countries/*.py' }}
-          repository: vacanza/holidays
+          repository: ${{ inputs.repository || 'vacanza/holidays' }}
           threshold_days: ${{ inputs.threshold_days || '120' }}
 
       - name: Display results

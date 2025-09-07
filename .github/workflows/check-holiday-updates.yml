@@ -42,6 +42,7 @@ jobs:
           dry_run: ${{ inputs.dry_run || false }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
           paths: ${{ inputs.paths || 'holidays/countries/*.py' }}
+          repository: vacanza/holidays
           threshold_days: ${{ inputs.threshold_days || '120' }}
 
       - name: Display results

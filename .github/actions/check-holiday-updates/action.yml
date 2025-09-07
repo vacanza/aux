@@ -13,6 +13,10 @@ inputs:
   paths:
     description: List of paths/globs to check for holiday files
     required: true
+  repository:
+    description: Repository where issues will be created (owner/repo)
+    required: false
+    default: 'vacanza/holidays'
   threshold_days:
     description: Age threshold for files in days
     required: false
@@ -35,5 +39,7 @@ runs:
     - ${{ inputs.paths }}
     - --github-token
     - ${{ inputs.github_token }}
+    - --repository
+    - ${{ inputs.repository }}
     - --threshold-days
     - ${{ inputs.threshold_days }}

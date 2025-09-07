@@ -34,6 +34,7 @@ class TestHolidayUpdatesChecker:
             paths=["holidays"],
             threshold_days=180,
             dry_run=True,
+            repository="test/repo",
         )
 
     def teardown_method(self):
@@ -44,7 +45,9 @@ class TestHolidayUpdatesChecker:
 
     def test_init_default_values(self):
         """Test initialization with default values."""
-        checker = HolidayUpdatesChecker(repo_path=str(self.repo_path))
+        checker = HolidayUpdatesChecker(
+            repo_path=str(self.repo_path), paths=["holidays"], repository="test/repo"
+        )
         assert checker.repo_path == Path(self.repo_path)
         assert checker.paths == ["holidays"]
         assert checker.threshold_days == 180
@@ -60,6 +63,7 @@ class TestHolidayUpdatesChecker:
             threshold_days=90,
             github_token="test_token",
             dry_run=True,
+            repository="test/repo",
         )
         assert checker.paths == ["custom/holidays"]
         assert checker.threshold_days == 90
@@ -77,14 +81,17 @@ class TestHolidayUpdatesChecker:
         mock_auth_class.Token.return_value = mock_auth
 
         checker = HolidayUpdatesChecker(
-            repo_path=str(self.repo_path), github_token="test_token"
+            repo_path=str(self.repo_path),
+            paths=["holidays"],
+            github_token="test_token",
+            repository="test/repo",
         )
 
         assert checker.github is not None
         assert checker.repo is not None
         mock_auth_class.Token.assert_called_once_with("test_token")
         mock_github_class.assert_called_once_with(auth=mock_auth)
-        mock_github.get_repo.assert_called_once_with("vacanza/holidays")
+        mock_github.get_repo.assert_called_once_with("test/repo")
 
     @patch("check_holiday_updates.Github")
     def test_init_github_error(self, mock_github_class):
@@ -92,7 +99,10 @@ class TestHolidayUpdatesChecker:
         mock_github_class.side_effect = Exception("API Error")
 
         checker = HolidayUpdatesChecker(
-            repo_path=str(self.repo_path), github_token="test_token"
+            repo_path=str(self.repo_path),
+            paths=["holidays"],
+            github_token="test_token",
+            repository="test/repo",
         )
 
         assert checker.github is None
@@ -286,7 +296,7 @@ class TestHolidayUpdatesChecker:
         file_info = {"name": "South Korea", "path": "holidays/countries/south_korea.py"}
 
         title = self.checker.create_issue_title(file_info)
-        expected = "[Holiday Updates] Update required: South Korea"
+        expected = "Update required: South Korea"
         assert title == expected
 
     def test_create_issue_body(self):
@@ -393,13 +403,22 @@ class TestMainFunction:
     """Test cases for main function and argument parsing."""
 
     @patch("check_holiday_updates.HolidayUpdatesChecker")
+    @patch("check_holiday_updates.Path")
     @patch("check_holiday_updates.os.path.exists")
     @patch("check_holiday_updates.os.listdir")
     @patch("check_holiday_updates.sys.argv", ["script.py", "--dry-run", "true"])
-    def test_main_dry_run(self, mock_listdir, mock_exists, mock_checker_class):
+    def test_main_dry_run(
+        self, mock_listdir, mock_exists, mock_path, mock_checker_class
+    ):
         """Test main function with dry run."""
         mock_exists.return_value = True
         mock_listdir.return_value = [".git", "holidays"]
+
+        # Mock Path.exists() to return True for .git directory
+        mock_path_instance = Mock()
+        mock_path_instance.exists.return_value = True
+        mock_path_instance.__truediv__ = Mock(return_value=mock_path_instance)
+        mock_path.return_value = mock_path_instance
 
         mock_checker = Mock()
         mock_checker.run.return_value = {
@@ -417,15 +436,22 @@ class TestMainFunction:
 
     @patch("check_holiday_updates.HolidayUpdatesChecker")
     @patch("check_holiday_updates.sys.exit")
+    @patch("check_holiday_updates.Path")
     @patch("check_holiday_updates.os.path.exists")
     @patch("check_holiday_updates.os.listdir")
     @patch("check_holiday_updates.sys.argv", ["script.py", "--dry-run", "true"])
     def test_main_with_errors(
-        self, mock_listdir, mock_exists, mock_exit, mock_checker_class
+        self, mock_listdir, mock_exists, mock_path, mock_exit, mock_checker_class
     ):
         """Test main function with errors."""
         mock_exists.return_value = True
         mock_listdir.return_value = [".git", "holidays"]
+
+        # Mock Path.exists() to return True for .git directory
+        mock_path_instance = Mock()
+        mock_path_instance.exists.return_value = True
+        mock_path_instance.__truediv__ = Mock(return_value=mock_path_instance)
+        mock_path.return_value = mock_path_instance
 
         mock_checker = Mock()
         mock_checker.run.return_value = {

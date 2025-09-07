@@ -35,10 +35,11 @@ class HolidayUpdatesChecker:
     def __init__(
         self,
         repo_path: str,
-        paths: List[str] = None,
-        threshold_days: int = 180,
-        github_token: Optional[str] = None,
+        paths: List[str],
         dry_run: bool = False,
+        github_token: Optional[str] = None,
+        repository: str = "vacanza/holidays",
+        threshold_days: int = 180,
     ):
         """
         Initialize the freshness checker.
@@ -46,14 +47,16 @@ class HolidayUpdatesChecker:
         Args:
             repo_path: Path to the repository root
             paths: List of paths/globs to check for holiday files
-            threshold_days: Days threshold for files (default: 180)
-            github_token: GitHub token for API access
             dry_run: If True, don't create actual issues
+            github_token: GitHub token for API access
+            repository: Repository where issues will be created (format: owner/repo)
+            threshold_days: Days threshold for files (default: 180)
         """
         self.repo_path = Path(repo_path)
-        self.paths = paths or ["holidays"]
+        self.paths = paths
         self.threshold_days = threshold_days
         self.dry_run = dry_run
+        self.repository = repository
 
         self._configure_git_safe_directory()
 
@@ -63,7 +66,7 @@ class HolidayUpdatesChecker:
             try:
                 auth = Auth.Token(github_token)
                 self.github = Github(auth=auth)
-                self.repo = self.github.get_repo("vacanza/holidays")
+                self.repo = self.github.get_repo(self.repository)
             except Exception as e:
                 logger.warning(f"Failed to initialize GitHub client: {e}")
                 self.github = None
@@ -75,14 +78,14 @@ class HolidayUpdatesChecker:
         """Configure git to trust the workspace directory."""
         try:
             safe_dir_result = subprocess.run(
-                [
+                (
                     "git",
                     "config",
                     "--global",
                     "--add",
                     "safe.directory",
                     str(self.repo_path),
-                ],
+                ),
                 cwd=self.repo_path,
                 capture_output=True,
                 text=True,
@@ -177,8 +180,7 @@ class HolidayUpdatesChecker:
 
     def extract_name_from_path(self, file_path: Path) -> str:
         """Extract a human-readable name from file path."""
-        name = file_path.stem.replace("_", " ").title()
-        return name
+        return file_path.stem.replace("_", " ").title()
 
     def parse_paths(self, paths: List[str]) -> List[Path]:
         """
@@ -224,7 +226,7 @@ class HolidayUpdatesChecker:
                         f"File does not exist or is not a Python file: {path}"
                     )
 
-        return sorted(set(file_paths))
+        return sorted(set(file_paths), reverse=True)
 
     def scan_files(self, file_paths: List[Path], threshold_days: int) -> List[Dict]:
         """
@@ -249,7 +251,6 @@ class HolidayUpdatesChecker:
                 continue
 
             age_days = self.get_file_age_days(file_path)
-
             if age_days > threshold_days:
                 last_modified = self.get_last_commit_date(file_path)
 
@@ -264,8 +265,6 @@ class HolidayUpdatesChecker:
                 logger.info(
                     f"Outdated file found: {file_info['path']} ({age_days} days old)"
                 )
-            else:
-                pass
 
         return outdated_files
 
@@ -305,8 +304,6 @@ class HolidayUpdatesChecker:
                 logger.info(
                     f"Outdated file found: {file_info['path']} ({age_days} days old)"
                 )
-            else:
-                pass
 
         return outdated_files
 
@@ -318,20 +315,17 @@ class HolidayUpdatesChecker:
             List of dictionaries containing outdated files
         """
         file_paths = self.parse_paths(self.paths)
-
         if not file_paths:
             logger.warning("No files found to check")
             return []
 
         logger.info(f"Found {len(file_paths)} files to check")
 
-        outdated_files = self.scan_files(file_paths, self.threshold_days)
-
-        return outdated_files
+        return self.scan_files(file_paths, self.threshold_days)
 
     def create_issue_title(self, file_info: Dict) -> str:
         """Create a GitHub issue title for an outdated file."""
-        return f"[Holiday Updates] Update required: {file_info['name']}"
+        return f"Update required: {file_info['name']}"
 
     def create_issue_body(self, file_info: Dict) -> str:
         """Create a GitHub issue body for an outdated file."""
@@ -397,10 +391,10 @@ class HolidayUpdatesChecker:
 
             logger.info(f"Created issue #{issue.number} for {file_info['path']}")
             return True
-
         except GithubException as e:
             logger.error(f"Failed to create issue for {file_info['path']}: {e}")
-            return False
+
+        return False
 
     def process_outdated_files(self, outdated_files: List[Dict]) -> Dict[str, int]:
         """
@@ -425,10 +419,7 @@ class HolidayUpdatesChecker:
 
     def run(self) -> Dict:
         """Run the complete freshness check and issue creation process."""
-        logger.info("Starting holiday updates monitoring...")
-
         outdated_files = self.check_freshness()
-
         stats = self.process_outdated_files(outdated_files)
 
         logger.info("Updates check completed:")
@@ -444,8 +435,7 @@ class HolidayUpdatesChecker:
 
 def write_github_output(output_name: str, value: str) -> None:
     """Write output to GitHub Actions output file."""
-    output_file = os.getenv("GITHUB_OUTPUT")
-    if output_file:
+    if output_file := os.getenv("GITHUB_OUTPUT"):
         with open(output_file, "a", encoding="utf-8") as f:
             f.write(f"{output_name}={value}\n")
 
@@ -469,6 +459,12 @@ def parse_args():
     )
     parser.add_argument("--github-token", type=str, help="GitHub token for API access")
     parser.add_argument(
+        "--repository",
+        type=str,
+        default="vacanza/holidays",
+        help="Repository where issues will be created (format: owner/repo)",
+    )
+    parser.add_argument(
         "--threshold-days",
         type=int,
         default=180,
@@ -486,13 +482,11 @@ def main():
     paths = [line.strip() for line in args.paths.split("\n") if line.strip()]
     threshold_days = args.threshold_days
     github_token = args.github_token or os.getenv("GITHUB_TOKEN")
+    repository = args.repository
     dry_run = args.dry_run.lower() == "true"
 
-    if os.path.exists(repo_path):
-        if not (Path(repo_path) / ".git").exists():
-            logger.warning("No .git directory found in repository path")
-    else:
-        logger.error(f"Repository path does not exist: {repo_path}")
+    if not os.path.exists(repo_path) or not (Path(repo_path) / ".git").exists():
+        logger.error(f"Git repository does not exist: {repo_path}")
         sys.exit(1)
 
     checker = HolidayUpdatesChecker(
@@ -500,30 +494,26 @@ def main():
         paths=paths,
         threshold_days=threshold_days,
         github_token=github_token,
+        repository=repository,
         dry_run=dry_run,
     )
 
-    try:
-        result = checker.run()
+    result = checker.run()
 
-        write_github_output("issues_created_count", str(result["stats"]["created"]))
-        write_github_output("outdated_files_count", str(len(result["outdated_files"])))
+    write_github_output("issues_created_count", str(result["stats"]["created"]))
+    write_github_output("outdated_files_count", str(len(result["outdated_files"])))
 
-        print("📊 Summary:")
-        print(f"  • Outdated files found: {len(result['outdated_files'])}")
-        print(f"  • Issues created: {result['stats']['created']}")
-        print(f"  • Errors: {result['stats']['errors']}")
+    print("📊 Summary:")
+    print(f"  • Outdated files found: {len(result['outdated_files'])}")
+    print(f"  • Issues created: {result['stats']['created']}")
+    print(f"  • Errors: {result['stats']['errors']}")
 
-        if result["outdated_files"]:
-            print("\n📁 Outdated files:")
-            for file_info in result["outdated_files"]:
-                print(f"  • {file_info['path']} ({file_info['age_days']} days old)")
+    if result["outdated_files"]:
+        print("\n📁 Outdated files:")
+        for file_info in result["outdated_files"]:
+            print(f"  • {file_info['path']} ({file_info['age_days']} days old)")
 
-        if result["stats"]["errors"] > 0:
-            sys.exit(1)
-
-    except Exception as e:
-        logger.error(f"Fatal error: {e}")
+    if result["stats"]["errors"] > 0:
         sys.exit(1)
 
 

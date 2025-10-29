@@ -1,17 +1,17 @@
 package: https://pypi.org/project/holidays
 source: https://pepy.tech/pepy-api
-last_1d_downloads: 396664
-last_1d_downloads_human: 397K
-last_7d_downloads: 4130477
+last_1d_downloads: 763219
+last_1d_downloads_human: 763K
+last_7d_downloads: 4012896
 last_7d_downloads_human: 4M
-last_30d_downloads: 18472857
-last_30d_downloads_human: 18M
+last_30d_downloads: 18857664
+last_30d_downloads_human: 19M
 previous_month_downloads: 18379932
 previous_month_downloads_human: 18M
 previous_month_reporting_period:
   start_date: '2025-09-01'
   end_date: '2025-09-30'
-total_downloads: 406802316
-total_downloads_human: 407M
-updated_at: '2025-10-28T02:37:27.147681+00:00'
-updated_data_date: '2025-10-26'
+total_downloads: 407565535
+total_downloads_human: 408M
+updated_at: '2025-10-29T02:39:53.696921+00:00'
+updated_data_date: '2025-10-27'

@@ -1,8 +1,6 @@
 name: Check Holiday Updates
 
 on:
-  schedule:
-    - cron: '0 2 1 * *'  # Run monthly on the 1st at 2 AM UTC
   workflow_dispatch:
     inputs:
       dry_run:
